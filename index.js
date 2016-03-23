@@ -141,10 +141,12 @@ prerender.shouldShowPrerenderedPage = function(req) {
   if(prerender.extensionsToIgnore.some(function(extension){return req.url.indexOf(extension) !== -1;})) return false;
 
   //if it is a bot and not requesting a resource and is not whitelisted...dont prerender
-  if(Array.isArray(this.whitelist) && this.whitelist.every(function(whitelisted){return (new RegExp(whitelisted)).test(req.url) === false;})) return false;
+  var whitelist = typeof(this.whitelist) === 'function' ? this.whitelist(req) : this.whitelist;
+  if(Array.isArray(whitelist) && whitelist.every(function(whitelisted){return (new RegExp(whitelisted)).test(req.url) === false;})) return false;
 
+  var blacklist = typeof(this.blacklist) === 'function' ? this.blacklist(req) : this.blacklist;
   //if it is a bot and not requesting a resource and is not blacklisted(url or referer)...dont prerender
-  if(Array.isArray(this.blacklist) && this.blacklist.some(function(blacklisted){
+  if(Array.isArray(blacklist) && blacklist.some(function(blacklisted){
     var blacklistedUrl = false
       , blacklistedReferer = false
       , regex = new RegExp(blacklisted);
@@ -172,8 +174,16 @@ prerender.getPrerenderedPageResponse = function(req, callback) {
   }
   options.headers['User-Agent'] = req.headers['user-agent'];
   options.headers['Accept-Encoding'] = 'gzip';
-  if(this.prerenderToken || process.env.PRERENDER_TOKEN) {
-    options.headers['X-Prerender-Token'] = this.prerenderToken || process.env.PRERENDER_TOKEN;
+
+  var token;
+  if(this.prerenderToken) {
+    token = (typeof(this.prerenderToken) == 'function') ? this.prerenderToken(req) : this.prerenderToken;
+  } else if (process.env.PRERENDER_TOKEN) {
+    token = process.env.PRERENDER_TOKEN;
+  }
+
+  if(token) {
+    options.headers['X-Prerender-Token'] = token;
   }
 
   request.get(options).on('response', function(response) {
